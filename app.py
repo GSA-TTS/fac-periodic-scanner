@@ -1,3 +1,6 @@
+# A very basic flask app to get the health check working for cgov and terraform. Due to this, the health check is
+# currently port based. We should change this in the future, however, for now, this is fine.
+
 import os
 from flask import Flask
 
