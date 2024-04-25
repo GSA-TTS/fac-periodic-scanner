@@ -22,4 +22,5 @@ def hello_world():
     return 'Temporary Flask App to ensure Terraform Apply Occurs'
 
 if __name__ == '__main__':
+    print("starting up...")
     app.run(host='0.0.0.0', port=port)
