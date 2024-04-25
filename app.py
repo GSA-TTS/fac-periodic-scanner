@@ -1,6 +1,16 @@
 # import dependencies
 import os
 from flask import Flask
+from threading import Thread
+from time import sleep
+
+def scan_loop():
+    while True:
+        print('this is where I would scan a file')
+        sleep(5)
+
+
+Thread(target=scan_loop, daemon=True).start()
 
 # bootstrap the app
 app = Flask(__name__)
