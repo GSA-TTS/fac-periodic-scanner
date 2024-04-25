@@ -4,6 +4,7 @@
 import logging
 from logging.config import dictConfig
 import os
+import sys
 from flask import Flask
 from threading import Thread
 from time import sleep
@@ -13,14 +14,14 @@ dictConfig({
     'formatters': {'default': {
         'format': '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
     }},
-    'handlers': {'wsgi': {
+    'handlers': {'default': {
         'class': 'logging.StreamHandler',
-        'stream': 'ext://flask.logging.wsgi_errors_stream',
+        'stream': sys.stdout,
         'formatter': 'default'
     }},
     'root': {
         'level': 'INFO',
-        'handlers': ['wsgi']
+        'handlers': ['default']
     }
 })
 
