@@ -2,6 +2,8 @@
 # currently port based. We should change this in the future, however, for now, this is fine.
 
 from boto3 import client as boto3_client
+from botocore.client import ClientError, Config
+
 import environs
 import json
 import logging
