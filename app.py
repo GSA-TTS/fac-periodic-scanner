@@ -82,7 +82,7 @@ def prepare_env():
     
     # load VCAP_SERVICES into env if defined
     try:
-        vcap_services = env.str("VCAP_SERVICES")
+        vcap_services = json.loads(env.str("VCAP_SERVICES"))
 
         # S3 configuration
         s3_credentials = vcap_services["s3"][0]["credentials"]
