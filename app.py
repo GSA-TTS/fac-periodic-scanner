@@ -36,7 +36,7 @@ def scan_loop():
     while True:
         vcap = json.loads(env.str("VCAP_SERVICES"))
 
-        s3 = vcap['s3']
+        s3 = vcap['s3'][0]
         s3_client = boto3_client(
             service_name="s3",
             region_name=s3["region"],
