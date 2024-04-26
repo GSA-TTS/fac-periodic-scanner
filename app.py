@@ -46,7 +46,7 @@ def scan_loop():
             region_name=s3["region"],
             aws_access_key_id=s3["access_key_id"],
             aws_secret_access_key=s3["secret_access_key"],
-            endpoint_url=s3["endpoint"],
+            endpoint_url=f"https://{s3['endpoint']}",
             config=Config(signature_version="s3v4"),
         )
 
