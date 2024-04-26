@@ -34,9 +34,11 @@ logger = logging.getLogger(__name__)
 
 def scan_loop():
     while True:
+        logger.info("loading s3 info")
+
         vcap = json.loads(env.str("VCAP_SERVICES"))
 
-        s3 = vcap['s3'][0]
+        s3 = vcap['s3'][0]["credentials"]
         s3_client = boto3_client(
             service_name="s3",
             region_name=s3["region"],
