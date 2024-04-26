@@ -1,6 +1,8 @@
 # A very basic flask app to get the health check working for cgov and terraform. Due to this, the health check is
 # currently port based. We should change this in the future, however, for now, this is fine.
 
+import environs
+import json
 import logging
 from logging.config import dictConfig
 import os
@@ -8,6 +10,8 @@ import sys
 from flask import Flask
 from threading import Thread
 from time import sleep
+
+env = environs.Env()
 
 dictConfig({
     'version': 1,
@@ -29,6 +33,9 @@ logger = logging.getLogger(__name__)
 
 def scan_loop():
     while True:
+        vcap = json.loads(env.str("VCAP_SERVICES"))
+        logger.info(vcap.keys())
+        
         logger.info('this is where I would scan a file')
         sleep(5)
 
