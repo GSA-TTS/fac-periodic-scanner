@@ -124,7 +124,7 @@ def scan_loop():
 
                         scan_result = scan_file(clamav_config, file)
 
-                        logger.info(f"scan result: {scan_result}")
+                        logger.info(f"{object_name}: scan result: {scan_result}")
 
                         sleep(1)
 
