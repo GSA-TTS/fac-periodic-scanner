@@ -20,8 +20,6 @@ import requests
 
 from config import S3Config, EnvS3Config, ClamAVConfig, EnvClamAVConfig
 
-newrelic.agent.initialize()
-
 env = environs.Env()
 
 dictConfig({
@@ -141,6 +139,8 @@ def health_check():
     return 'healthy'
 
 def create_app():
+    newrelic.agent.initialize()
+
     worker = Thread(target=scan_loop, daemon=True)
     worker.start()
 
