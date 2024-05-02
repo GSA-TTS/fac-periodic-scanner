@@ -10,6 +10,7 @@ from io import BytesIO
 import json
 import logging
 from logging.config import dictConfig
+import newrelic.agent
 import os
 import sys
 from flask import Flask
@@ -18,6 +19,8 @@ from time import sleep
 import requests
 
 from config import S3Config, EnvS3Config, ClamAVConfig, EnvClamAVConfig
+
+newrelic.agent.initialize()
 
 env = environs.Env()
 
