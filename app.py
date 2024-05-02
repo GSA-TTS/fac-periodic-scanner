@@ -128,21 +128,21 @@ def scan_loop():
 
                         sleep(1)
 
-
 app = Flask(__name__)
-port = int(os.getenv('PORT', '8080'))
 
 @app.route('/')
-def hello_world():
-    return 'Temporary Flask App to ensure Terraform Apply Occurs'
+def health_check():
+    logger.info('handling health check')
+    return 'healthy'
 
-def run_flask():
-    logger.info("starting up...")
-    app.run(host='0.0.0.0', port=port)
-
-
-if __name__ == '__main__':
-    worker = Thread(target=run_flask, daemon=True)
+def create_app():
+    worker = Thread(target=scan_loop, daemon=True)
     worker.start()
 
-    scan_loop()
+    return app
+
+if __name__ == '__main__':
+    logger.info("starting up...")
+
+    port = int(os.getenv('PORT', '8080'))
+    create_app().run(host='0.0.0.0', port=port)    

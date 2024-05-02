@@ -1,1 +1,1 @@
-web: newrelic-admin run-program gunicorn -w 1 'app:app'
+web: newrelic-admin run-program gunicorn -w 1 'app:create_app()'
