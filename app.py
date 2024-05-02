@@ -10,7 +10,6 @@ from io import BytesIO
 import json
 import logging
 from logging.config import dictConfig
-import newrelic.agent
 import os
 import sys
 from flask import Flask
@@ -139,8 +138,6 @@ def health_check():
     return 'healthy'
 
 def create_app():
-    newrelic.agent.initialize()
-
     worker = Thread(target=scan_loop, daemon=True)
     worker.start()
 
