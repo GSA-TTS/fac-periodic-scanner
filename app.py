@@ -96,7 +96,7 @@ def prepare_env():
         os.environ["AWS_S3_BUCKET"] = s3_credentials["bucket"]
 
         # ClamAV configuration
-        for ups in vcap_services:
+        for ups in vcap_services["user-provided"]:
             if ups["name"] == "clamav_ups":
                 clamav_credentials = ups["credentials"]
                 os.environ["CLAMAV_ENDPOINT_URL"] = clamav_credentials["AV_SCAN_URL"]
