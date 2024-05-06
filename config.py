@@ -1,5 +1,6 @@
 import environs
 
+
 class S3Config:
     def __init__(self):
         self.region_name = ""
