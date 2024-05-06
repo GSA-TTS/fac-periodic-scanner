@@ -100,7 +100,7 @@ def scan_file(clamav_config: ClamAVConfig, file) -> ScanResult:
 
 def prepare_env():
     # read .env file if there is one
-    res = env.read_env(recurse=False, override=True)
+    env.read_env(recurse=False, override=True)
 
     # load VCAP_SERVICES into env if defined
     try:
