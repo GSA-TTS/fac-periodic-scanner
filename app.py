@@ -1,9 +1,10 @@
-# A very basic flask app to get the health check working for cgov and terraform. Due to this, the health check is
-# currently port based. We should change this in the future, however, for now, this is fine.
+# A very basic flask app to get the health check working for cgov and terraform
+# Due to this, the health check is currently port based. 
+# We should change this in the future, however, for now, this is fine.
 
 from boto3 import client as boto3_client
 from botocore.client import ClientError, Config
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 import environs
 from io import BytesIO
@@ -18,8 +19,6 @@ from time import sleep
 import requests
 
 from config import S3Config, EnvS3Config, ClamAVConfig, EnvClamAVConfig
-
-from peewee import *
 
 env = environs.Env()
 
@@ -42,20 +41,9 @@ dictConfig(
     }
 )
 
-FILE_REFRESH_INTERVAL_SECS = 600
-FILE_SCAN_INTERVAL_SECS = 1
-
-db = SqliteDatabase("scanner.db")
-
-
-class ScannedFile(Model):
-    filename = CharField(unique=True)
-    last_scan_timestamp = DateTimeField(null=True)
-    last_scan_result = CharField()
-
-    class Meta:
-        database = db
-
+FILE_SCAN_THROTTLE_SECS = 1
+FILE_SCAN_INTERVAL_DAYS = 180
+DEFAULT_LAST_SCAN_TIMESTAMP = datetime.utcfromtimestamp(0).isoformat()
 
 logger = logging.getLogger(__name__)
 
@@ -110,49 +98,94 @@ def prepare_env():
         s3_credentials = vcap_services["s3"][0]["credentials"]
         os.environ["AWS_S3_REGION_NAME"] = s3_credentials["region"]
         os.environ["AWS_S3_ACCESS_KEY_ID"] = s3_credentials["access_key_id"]
-        os.environ["AWS_S3_SECRET_ACCESS_KEY"] = s3_credentials["secret_access_key"]
-        os.environ["AWS_S3_ENDPOINT_URL"] = f"https://{s3_credentials['endpoint']}"
+        os.environ["AWS_S3_SECRET_ACCESS_KEY"] = s3_credentials[
+            "secret_access_key"
+        ]
+        os.environ["AWS_S3_ENDPOINT_URL"] = (
+            f"https://{s3_credentials['endpoint']}"
+        )
         os.environ["AWS_S3_BUCKET"] = s3_credentials["bucket"]
 
         # ClamAV configuration
         for ups in vcap_services["user-provided"]:
             if ups["name"] == "clamav_ups":
                 clamav_credentials = ups["credentials"]
-                os.environ["CLAMAV_ENDPOINT_URL"] = clamav_credentials["AV_SCAN_URL"]
+                os.environ["CLAMAV_ENDPOINT_URL"] = clamav_credentials[
+                    "AV_SCAN_URL"
+                ]
 
     except:
         logger.info("no VCAP_SERVICES defined in env")
 
 
-def create_scanned_file(filename, scan_timestamp, scan_result):
-    ScannedFile.insert(
-        filename=filename,
-        last_scan_timestamp=scan_timestamp,
-        last_scan_result=scan_result,
-    ).on_conflict_ignore().execute()
+def object_needs_scan(s3_config: S3Config, object_name: str) -> bool:
+    s3_client = construct_s3_client(s3_config)
+
+    try:
+        tagging = s3_client.get_object_tagging(
+            Bucket=s3_config.bucket, Key=object_name
+        )
+
+        tags = tagging["TagSet"]
+        last_scan_tag = next(
+            (t for t in tags if t["Key"] == "last_scan_timestamp"),
+            DEFAULT_LAST_SCAN_TIMESTAMP,
+        )
+        last_scan_timestamp = datetime.fromisoformat(last_scan_tag["Value"])
+
+        time_since_last_scan = datetime.utcnow() - last_scan_timestamp
+
+        return time_since_last_scan > timedelta(seconds=180)
+    except ClientError as e:
+        logger.warn(f"error while getting tags for {object_name}: {e}")
+        return False
 
 
-def upsert_scanned_file(filename, scan_timestamp, scan_result):
-    ScannedFile.insert(
-        filename=filename,
-        last_scan_timestamp=scan_timestamp,
-        last_scan_result=scan_result,
-    ).on_conflict(
-        conflict_target=[ScannedFile.filename],
-        preserve=[ScannedFile.last_scan_timestamp, ScannedFile.last_scan_result],
-    ).execute()
+def update_object_scan_timestamp(s3_config: S3Config, object_name: str):
+    s3_client = construct_s3_client(s3_config)
+
+    try:
+        s3_client.put_object_tagging(
+            Bucket=s3_config.bucket,
+            Key=object_name,
+            Tagging={
+                "TagSet": [
+                    {
+                        "Key": "last_scan_timestamp",
+                        "Value": datetime.utcnow().isoformat(),
+                    }
+                ]
+            },
+        )
+    except ClientError as e:
+        logger.warn(f"error while putting tags for {object_name}: {e}")
 
 
-def refresh_files():
+def download_file(s3_config: S3Config, object_name: str) -> BytesIO:
+    s3_client = construct_s3_client(s3_config)
+
+    try:
+        file = BytesIO()
+        s3_client.download_fileobj(s3_config.bucket, object_name, file)
+        file.seek(0)
+
+        return file
+    except ClientError as e:
+        logger.warn(f"error while downloading {object_name}: {e}")
+        return None
+
+
+def scan_files():
     """
-    Periodically scan the target S3 bucket and created a ScannedFile entry in the database for file
+    Fetch the least recently scanned file from the database, scan it, and update its database record with the new scan result & timestamp
     """
+
     s3_config = EnvS3Config(env)
     s3_client = construct_s3_client(s3_config)
 
-    while True:
-        logger.info("refreshing files...")
+    clamav_config = EnvClamAVConfig(env)
 
+    while True:
         paginator = s3_client.get_paginator("list_objects_v2")
         pages = paginator.paginate(Bucket=s3_config.bucket)
 
@@ -161,42 +194,23 @@ def refresh_files():
                 if "Contents" in page:
                     for object_summary in page["Contents"]:
                         object_name = object_summary["Key"]
-                        scan_timestamp = None
-                        scan_result = ScanResult.UNKNOWN
 
-                        create_scanned_file(object_name, scan_timestamp, scan_result)
+                        if object_needs_scan(s3_config, object_name):
+                            file = download_file(s3_config, object_name)
 
-        logger.info("done refreshing files...")
+                            if file:
+                                scan_result = scan_file(clamav_config, file)
+                                update_object_scan_timestamp(s3_config, object_name)
 
-        sleep(FILE_REFRESH_INTERVAL_SECS)
+                                logger.info(
+                                    f"{object_name} scan result: {scan_result}"
+                                )
+                        else:
+                            logger.info(
+                                f"{object_name} does not need to be scanned"
+                            )
 
-
-def scan_files():
-    """
-    Fetch the least recently scanned file from the database, scan it, and update its database record with the new scan result & timestamp
-    """
-    while True:
-        s3_config = EnvS3Config(env)
-
-        s3_client = construct_s3_client(s3_config)
-
-        clamav_config = EnvClamAVConfig(env)
-
-        # scan the least recently scanned file in the database
-        for scanned_file in (
-            ScannedFile.select().order_by(ScannedFile.last_scan_timestamp).limit(1)
-        ):
-            file = BytesIO()
-            s3_client.download_fileobj(s3_config.bucket, scanned_file.filename, file)
-            file.seek(0)
-
-            scan_result = scan_file(clamav_config, file)
-
-            upsert_scanned_file(scanned_file.filename, datetime.utcnow(), scan_result)
-
-            logger.info(f"{scanned_file.filename}: scan result: {scan_result}")
-
-            sleep(FILE_SCAN_INTERVAL_SECS)
+                        sleep(FILE_SCAN_THROTTLE_SECS)
 
 
 app = Flask(__name__)
@@ -210,12 +224,6 @@ def health_check():
 
 def create_app():
     prepare_env()
-
-    db.connect()
-    db.create_tables([ScannedFile])
-
-    file_refresh_worker = Thread(target=refresh_files, daemon=True)
-    file_refresh_worker.start()
 
     scan_worker = Thread(target=scan_files, daemon=True)
     scan_worker.start()
