@@ -127,14 +127,10 @@ def object_needs_scan(s3_config: S3Config, object_name: str) -> bool:
         )
 
         tags = tagging["TagSet"]
-        last_scan_tag = next(
-            (t for t in tags if t["Key"] == "last_scan_timestamp"),
+        last_scan_timestamp = datetime.fromisoformat(next(
+            (t["Value"] for t in tags if t["Key"] == "last_scan_timestamp"),
             DEFAULT_LAST_SCAN_TIMESTAMP,
-        )
-
-        print(last_scan_tag)
-
-        last_scan_timestamp = datetime.fromisoformat(last_scan_tag["Value"])
+        ))
 
         time_since_last_scan = datetime.utcnow() - last_scan_timestamp
 
