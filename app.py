@@ -41,6 +41,7 @@ dictConfig(
     }
 )
 
+SCAN_LOOP_INTERVAL_SECS = 60
 FILE_SCAN_INTERVAL_DAYS = 180
 DEFAULT_LAST_SCAN_TIMESTAMP = datetime.utcfromtimestamp(0).isoformat()
 
@@ -131,8 +132,6 @@ def object_needs_scan(s3_config: S3Config, object_name: str) -> bool:
             DEFAULT_LAST_SCAN_TIMESTAMP,
         ))
 
-        logger.info(f"{object_name} was last scanned at {last_scan_timestamp}")
-
         time_since_last_scan = datetime.utcnow() - last_scan_timestamp
 
         return time_since_last_scan > timedelta(seconds=180)
@@ -169,8 +168,6 @@ def download_file(s3_config: S3Config, object_name: str) -> BytesIO:
         s3_client.download_fileobj(s3_config.bucket, object_name, file)
         file.seek(0)
 
-        logger.info(f"downloaded {object_name} from S3")
-
         return file
     except ClientError as e:
         logger.warn(f"error while downloading {object_name}: {e}")
@@ -188,6 +185,8 @@ def scan_files():
     clamav_config = EnvClamAVConfig(env)
 
     while True:
+        object_count = 0
+        
         try:
             paginator = s3_client.get_paginator("list_objects_v2")
             pages = paginator.paginate(Bucket=s3_config.bucket)
@@ -196,15 +195,14 @@ def scan_files():
                 for page in pages:
                     if "Contents" in page:
                         for object_summary in page["Contents"]:
+                            object_count += 1
                             object_name = object_summary["Key"]
 
                             if object_needs_scan(s3_config, object_name):
                                 file = download_file(s3_config, object_name)
 
                                 if file:
-                                    logger.info(f"attempting to scan {object_name} with ClamAV")
                                     scan_result = scan_file(clamav_config, file)
-                                    logger.info(f"finished scanning {object_name} with ClamAV")
                                     update_object_scan_timestamp(s3_config, object_name)
 
                                     logger.info(
@@ -212,7 +210,9 @@ def scan_files():
                                     )
         except Exception as e:
             logger.warn(f"error while scanning: {e}")
-            sleep(60)
+        finally:
+            logger.info(f"finished checking all {object_count} files, waiting {SCAN_LOOP_INTERVAL_SECS}s before restarting")
+            sleep(SCAN_LOOP_INTERVAL_SECS)
 
 
 app = Flask(__name__)
