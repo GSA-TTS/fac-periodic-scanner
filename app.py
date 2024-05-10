@@ -131,6 +131,8 @@ def object_needs_scan(s3_config: S3Config, object_name: str) -> bool:
             DEFAULT_LAST_SCAN_TIMESTAMP,
         ))
 
+        logger.info(f"{object_name} was last scanned at {last_scan_timestamp}")
+
         time_since_last_scan = datetime.utcnow() - last_scan_timestamp
 
         return time_since_last_scan > timedelta(seconds=180)
@@ -167,6 +169,8 @@ def download_file(s3_config: S3Config, object_name: str) -> BytesIO:
         s3_client.download_fileobj(s3_config.bucket, object_name, file)
         file.seek(0)
 
+        logger.info(f"downloaded {object_name} from S3")
+
         return file
     except ClientError as e:
         logger.warn(f"error while downloading {object_name}: {e}")
@@ -198,7 +202,9 @@ def scan_files():
                                 file = download_file(s3_config, object_name)
 
                                 if file:
+                                    logger.info(f"attempting to scan {object_name} with ClamAV")
                                     scan_result = scan_file(clamav_config, file)
+                                    logger.info(f"finished scanning {object_name} with ClamAV")
                                     update_object_scan_timestamp(s3_config, object_name)
 
                                     logger.info(
