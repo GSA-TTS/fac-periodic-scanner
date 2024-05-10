@@ -41,7 +41,6 @@ dictConfig(
     }
 )
 
-FILE_SCAN_THROTTLE_SECS = 1
 FILE_SCAN_INTERVAL_DAYS = 180
 DEFAULT_LAST_SCAN_TIMESTAMP = datetime.utcfromtimestamp(0).isoformat()
 
@@ -185,31 +184,29 @@ def scan_files():
     clamav_config = EnvClamAVConfig(env)
 
     while True:
-        paginator = s3_client.get_paginator("list_objects_v2")
-        pages = paginator.paginate(Bucket=s3_config.bucket)
+        try:
+            paginator = s3_client.get_paginator("list_objects_v2")
+            pages = paginator.paginate(Bucket=s3_config.bucket)
 
-        if pages:
-            for page in pages:
-                if "Contents" in page:
-                    for object_summary in page["Contents"]:
-                        object_name = object_summary["Key"]
+            if pages:
+                for page in pages:
+                    if "Contents" in page:
+                        for object_summary in page["Contents"]:
+                            object_name = object_summary["Key"]
 
-                        if object_needs_scan(s3_config, object_name):
-                            file = download_file(s3_config, object_name)
+                            if object_needs_scan(s3_config, object_name):
+                                file = download_file(s3_config, object_name)
 
-                            if file:
-                                scan_result = scan_file(clamav_config, file)
-                                update_object_scan_timestamp(s3_config, object_name)
+                                if file:
+                                    scan_result = scan_file(clamav_config, file)
+                                    update_object_scan_timestamp(s3_config, object_name)
 
-                                logger.info(
-                                    f"{object_name} scan result: {scan_result}"
-                                )
-                        else:
-                            logger.info(
-                                f"{object_name} does not need to be scanned"
-                            )
-
-                        sleep(FILE_SCAN_THROTTLE_SECS)
+                                    logger.info(
+                                        f"{object_name} scan result: {scan_result}"
+                                    )
+        except Exception as e:
+            logger.warn(f"error while scanning: {e}")
+            sleep(60)
 
 
 app = Flask(__name__)
