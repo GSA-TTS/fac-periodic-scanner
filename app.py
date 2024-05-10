@@ -192,7 +192,9 @@ def scan_files():
             pages = paginator.paginate(Bucket=s3_config.bucket)
 
             if pages:
+                page_index = 0
                 for page in pages:
+                    page_index += 1
                     if "Contents" in page:
                         for object_summary in page["Contents"]:
                             object_count += 1
@@ -208,10 +210,12 @@ def scan_files():
                                     logger.info(
                                         f"{object_name} scan result: {scan_result}"
                                     )
+
+                    logger.info(f"finished checking page {page_index} ({page['KeyCount']} objects)")
         except Exception as e:
             logger.warn(f"error while scanning: {e}")
         finally:
-            logger.info(f"finished checking all {object_count} files, waiting {SCAN_LOOP_INTERVAL_SECS}s before restarting")
+            logger.info(f"checked {object_count} files, waiting {SCAN_LOOP_INTERVAL_SECS}s before restarting")
             sleep(SCAN_LOOP_INTERVAL_SECS)
 
 
