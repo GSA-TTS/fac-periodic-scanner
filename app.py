@@ -42,7 +42,7 @@ dictConfig(
 )
 
 SCAN_LOOP_INTERVAL_SECS = 60
-FILE_SCAN_INTERVAL_DAYS = 180
+FILE_SCAN_INTERVAL_DAYS = 60
 DEFAULT_LAST_SCAN_TIMESTAMP = datetime.utcfromtimestamp(0).isoformat()
 
 logger = logging.getLogger(__name__)
@@ -134,7 +134,7 @@ def object_needs_scan(s3_config: S3Config, object_name: str) -> bool:
 
         time_since_last_scan = datetime.utcnow() - last_scan_timestamp
 
-        return time_since_last_scan > timedelta(seconds=180)
+        return time_since_last_scan > timedelta(days=FILE_SCAN_INTERVAL_DAYS)
     except ClientError as e:
         logger.warn(f"error while getting tags for {object_name}: {e}")
         return False
