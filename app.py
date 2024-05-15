@@ -80,7 +80,7 @@ def scan_file(clamav_config: ClamAVConfig, file) -> ScanResult:
     response = requests.post(
         clamav_config.endpoint_url,
         files={"file": file},
-        timeout=30,
+        timeout=60,
     )
 
     return ScanResult.from_http_status(response.status_code)
@@ -189,7 +189,7 @@ def scan_files():
         
         try:
             paginator = s3_client.get_paginator("list_objects_v2")
-            pages = paginator.paginate(Bucket=s3_config.bucket)
+            pages = paginator.paginate(Bucket=s3_config.bucket, Prefix="singleauditreport")
 
             if pages:
                 page_index = 0
