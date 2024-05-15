@@ -95,7 +95,9 @@ def prepare_env():
         vcap_services = json.loads(env.str("VCAP_SERVICES"))
 
         # S3 configuration
-        s3_credentials = vcap_services["s3"][0]["credentials"]
+        fac_private_s3 = next(x for x in vcap_services["s3"] if x["name"] == "fac-private-s3")
+
+        s3_credentials = fac_private_s3["credentials"]
         os.environ["AWS_S3_REGION_NAME"] = s3_credentials["region"]
         os.environ["AWS_S3_ACCESS_KEY_ID"] = s3_credentials["access_key_id"]
         os.environ["AWS_S3_SECRET_ACCESS_KEY"] = s3_credentials[
