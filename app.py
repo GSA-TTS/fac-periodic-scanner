@@ -80,7 +80,7 @@ def scan_file(clamav_config: ClamAVConfig, file) -> ScanResult:
     response = requests.post(
         clamav_config.endpoint_url,
         files={"file": file},
-        timeout=60,
+        timeout=180,
     )
 
     return ScanResult.from_http_status(response.status_code)
@@ -199,19 +199,22 @@ def scan_files():
                     page_index += 1
                     if "Contents" in page:
                         for object_summary in page["Contents"]:
-                            object_count += 1
-                            object_name = object_summary["Key"]
+                            try:
+                                object_count += 1
+                                object_name = object_summary["Key"]
 
-                            if object_needs_scan(s3_config, object_name):
-                                file = download_file(s3_config, object_name)
+                                if object_needs_scan(s3_config, object_name):
+                                    file = download_file(s3_config, object_name)
 
-                                if file:
-                                    scan_result = scan_file(clamav_config, file)
-                                    update_object_scan_timestamp(s3_config, object_name)
+                                    if file:
+                                        scan_result = scan_file(clamav_config, file)
+                                        update_object_scan_timestamp(s3_config, object_name)
 
-                                    logger.info(
-                                        f"{object_name} scan result: {scan_result}"
-                                    )
+                                        logger.info(
+                                            f"{object_name} scan result: {scan_result}"
+                                        )
+                            except Exception as e:
+                                logger.warn(f"error while scanning {object_name}: {e}")
 
                     logger.info(f"finished checking page {page_index} ({page['KeyCount']} objects)")
         except Exception as e:
